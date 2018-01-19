@@ -16,12 +16,22 @@ module('ember-lifeline/utils/disposable', {
   },
 });
 
-test('registerDisposable asserts if `dispose` is not a function', function(assert) {
-  assert.expect(1);
+test('registerDisposable asserts if `dispose` has incorrect params', function(assert) {
+  assert.expect(4);
 
   assert.throws(function() {
-    registerDisposable({}, null);
+    registerDisposable();
   });
+
+  assert.throws(function() {
+    registerDisposable({});
+  });
+
+  assert.throws(function() {
+    registerDisposable({}, 1);
+  });
+
+  assert.ok(registerDisposable({}, 1, () => {}));
 });
 
 test('registerDisposable correctly allocates array if not allocated', function(assert) {
@@ -29,9 +39,9 @@ test('registerDisposable correctly allocates array if not allocated', function(a
 
   assert.equal(this.subject._registeredDisposables, undefined);
 
-  registerDisposable(this.subject, function() {});
+  registerDisposable(this.subject, 1, function() {});
 
-  assert.equal(this.subject._registeredDisposables.constructor, Array);
+  assert.equal(this.subject._registeredDisposables.constructor, Map);
 });
 
 test('registerDisposable correctly converts dispose function to disposable', function(assert) {
@@ -39,7 +49,7 @@ test('registerDisposable correctly converts dispose function to disposable', fun
 
   let dispose = () => {};
 
-  let disposable = registerDisposable(this.subject, dispose);
+  let disposable = registerDisposable(this.subject, 1, dispose);
 
   assert.equal(disposable.constructor, Object, 'disposable is an object');
   assert.equal(
@@ -54,11 +64,12 @@ test('registerDisposable adds disposable to disposables', function(assert) {
   assert.expect(1);
 
   let dispose = () => {};
+  let token = 1;
 
-  let disposable = registerDisposable(this.subject, dispose);
+  let disposable = registerDisposable(this.subject, token, dispose);
 
   assert.equal(
-    this.subject._registeredDisposables[0],
+    this.subject._registeredDisposables.get(token),
     disposable,
     'dispose function is added to _registeredDisposables'
   );
@@ -68,16 +79,17 @@ test('registerDisposable adds unique disposable to disposables', function(assert
   assert.expect(2);
 
   let dispose = () => {};
+  let token = 1;
 
-  let disposable = registerDisposable(this.subject, dispose);
+  let disposable = registerDisposable(this.subject, token, dispose);
 
   assert.equal(
     disposable,
-    this.subject._registeredDisposables[0],
+    this.subject._registeredDisposables.get(token),
     'disposable is returned'
   );
 
-  let otherDisposable = registerDisposable(this.subject, dispose);
+  let otherDisposable = registerDisposable(this.subject, token, dispose);
 
   assert.notEqual(disposable, otherDisposable, 'disposable returned is unique');
 });
@@ -92,7 +104,7 @@ test('registerDisposable sets up willDestroy', function(assert) {
     'willDestroy has not been patched'
   );
 
-  registerDisposable(this.subject, dispose);
+  registerDisposable(this.subject, 1, dispose);
 
   assert.ok(this.subject.willDestroy.patched, 'willDestroy is patched');
 });
@@ -107,13 +119,13 @@ test('registerDisposable sets up willDestroy only once', function(assert) {
     'willDestroy has not been patched'
   );
 
-  registerDisposable(this.subject, dispose);
+  registerDisposable(this.subject, 1, dispose);
 
   assert.ok(this.subject.willDestroy.patched, 'willDestroy is patched');
 
   this.subject.willDestroy.twice = false;
 
-  registerDisposable(this.subject, dispose);
+  registerDisposable(this.subject, 2, dispose);
 
   assert.notOk(this.subject.willDestroy.twice, 'willDestroy only patched once');
 });
@@ -125,14 +137,15 @@ test('disposable invoked explicitly disposes of disposable', function(assert) {
   let dispose = () => {
     callCount++;
   };
+  let token = 1;
 
-  let disposable = registerDisposable(this.subject, dispose);
+  let disposable = registerDisposable(this.subject, token, dispose);
 
   disposable.dispose();
 
   assert.equal(callCount, 1, 'disposable is called');
   assert.ok(
-    this.subject._registeredDisposables[0].disposed,
+    this.subject._registeredDisposables.get(token).disposed,
     'disposable marked as disposed'
   );
 });
@@ -144,15 +157,16 @@ test('disposable invoked explicitly multiple times is only invoked once', functi
   let dispose = () => {
     callCount++;
   };
+  let token = 1;
 
-  let disposable = registerDisposable(this.subject, dispose);
+  let disposable = registerDisposable(this.subject, token, dispose);
 
   disposable.dispose();
   disposable.dispose();
 
   assert.equal(callCount, 1, 'disposable is called');
   assert.ok(
-    this.subject._registeredDisposables[0].disposed,
+    this.subject._registeredDisposables.get(token).disposed,
     'disposable marked as disposed'
   );
 });
@@ -163,11 +177,11 @@ test('runDisposables: runs all disposables when destroying', function(assert) {
   let dispose = () => {};
   let disposeTheSecond = () => {};
 
-  registerDisposable(this.subject, dispose);
-  registerDisposable(this.subject, disposeTheSecond);
+  registerDisposable(this.subject, 1, dispose);
+  registerDisposable(this.subject, 2, disposeTheSecond);
 
   assert.equal(
-    this.subject._registeredDisposables.length,
+    this.subject._registeredDisposables.size,
     2,
     'two disposables are registered'
   );
@@ -175,7 +189,7 @@ test('runDisposables: runs all disposables when destroying', function(assert) {
   run(this.subject, 'destroy');
 
   assert.equal(
-    this.subject._registeredDisposables.length,
+    this.subject._registeredDisposables.size,
     0,
     'no disposables are registered'
   );
@@ -187,8 +201,12 @@ test('runDisposables: sets all disposables to disposed', function(assert) {
   let dispose = () => {};
   let disposeTheSecond = () => {};
 
-  let disposable = registerDisposable(this.subject, dispose);
-  let disposableTheSecond = registerDisposable(this.subject, disposeTheSecond);
+  let disposable = registerDisposable(this.subject, 1, dispose);
+  let disposableTheSecond = registerDisposable(
+    this.subject,
+    2,
+    disposeTheSecond
+  );
 
   run(this.subject, 'destroy');
 
