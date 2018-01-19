@@ -2,6 +2,7 @@ import Mixin from '@ember/object/mixin';
 import { run } from '@ember/runloop';
 import { assert } from '@ember/debug';
 import Ember from 'ember';
+import { registerDisposable } from '../utils/disposable';
 import getOrAllocate from '../utils/get-or-allocate';
 import getNextToken from '../utils/get-next-token';
 
@@ -88,18 +89,15 @@ export default Mixin.create({
       !this.isDestroyed
     );
 
-    let pendingTimers = getOrAllocate(this, '_pendingTimers', Array);
-
     let cancelId = run.later(() => {
-      let cancelIndex = pendingTimers.indexOf(cancelId);
-      pendingTimers.splice(cancelIndex, 1);
+      getOrAllocate(this, '_registeredDisposables', Map).delete(cancelId);
 
       let task = getTask(this, taskOrName, 'runTask');
 
       task.call(this);
     }, timeout);
 
-    pendingTimers.push(cancelId);
+    registerDisposable(this, cancelId, () => run.cancel(cancelId));
     return cancelId;
   },
 
